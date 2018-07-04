@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# Check tracing of looping threads.
+#
+# Copyright (c) 2009-2019 The strace developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+. "${srcdir=.}/init.sh"
+
+check_prog nproc
+timeout="$(($TIMEOUT_DURATION/10))"
+nproc="$((64+$timeout+$(nproc)))"
+
+run_prog "../$NAME" "$timeout" "$nproc"
+run_strace -f -qq -enone -esignal=none $args
