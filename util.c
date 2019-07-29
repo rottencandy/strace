@@ -6,7 +6,7 @@
  * Copyright (c) 1999 IBM Deutschland Entwicklung GmbH, IBM Corporation
  *                     Linux for s390 port by D.J. Barrow
  *                    <barrow_dj@mail.yahoo.com,djbarrow@de.ibm.com>
- * Copyright (c) 1999-2018 The strace developers.
+ * Copyright (c) 1999-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -270,6 +270,18 @@ DEF_PRINTNUM(int64, uint64_t)
 DEF_PRINTNUM_ADDR(int64, uint64_t)
 DEF_PRINTPAIR(int64, uint64_t)
 
+bool
+printnum_fd(struct tcb *const tcp, const kernel_ulong_t addr)
+{
+	int fd;
+	if (umove_or_printaddr(tcp, addr, &fd))
+		return false;
+	tprints("[");
+	printfd(tcp, fd);
+	tprints("]");
+	return true;
+}
+
 #ifndef current_wordsize
 bool
 printnum_long_int(struct tcb *const tcp, const kernel_ulong_t addr,
@@ -455,7 +467,7 @@ printsocket(struct tcb *tcp, int fd, const char *path)
 static bool
 printdev(struct tcb *tcp, int fd, const char *path)
 {
-	struct_stat st;
+	strace_stat_t st;
 
 	if (path[0] != '/')
 		return false;
@@ -1227,7 +1239,6 @@ print_array_ex(struct tcb *const tcp,
 	       void *const opaque_data,
 	       unsigned int flags,
 	       const struct xlat *index_xlat,
-	       size_t index_xlat_size,
 	       const char *index_dflt)
 {
 	if (!start_addr) {
@@ -1283,15 +1294,9 @@ print_array_ex(struct tcb *const tcp,
 
 			if (!index_xlat) {
 				print_xlat_ex(idx, NULL, xlat_style);
-			} else if (flags & PAF_INDEX_XLAT_VALUE_INDEXED) {
-				printxval_indexn_ex(index_xlat,
-						    index_xlat_size, idx,
-						    index_dflt, xlat_style);
 			} else {
-				printxvals_ex(idx, index_dflt, xlat_style,
-					      (flags & PAF_INDEX_XLAT_SORTED)
-						&& idx ? NULL : index_xlat,
-					      NULL);
+				printxval_ex(idx ? NULL : index_xlat, idx,
+					     index_dflt, xlat_style);
 			}
 
 			tprints("] = ");
@@ -1350,12 +1355,6 @@ print_abnormal_hi(const kernel_ulong_t val)
 			tprintf("%#x<<32|", hi);
 	}
 }
-
-#if defined _LARGEFILE64_SOURCE && defined HAVE_OPEN64
-# define open_file open64
-#else
-# define open_file open
-#endif
 
 int
 read_int_from_file(struct tcb *tcp, const char *const fname, int *const pvalue)

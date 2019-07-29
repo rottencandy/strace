@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016 Dmitry V. Levin <ldv@altlinux.org>
- * Copyright (c) 2016-2018 The strace developers.
+ * Copyright (c) 2016-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -85,6 +85,12 @@ void perror_msg_and_skip(const char *, ...)
 
 /* Stat the specified file and skip the test if the stat call failed. */
 void skip_if_unavailable(const char *);
+
+/*
+ * Obtain an exclusive lock on dirname(path_name)/lock_name file
+ * using open and flock.
+ */
+int lock_file_by_dirname(const char *path_name, const char *lock_name);
 
 /*
  * Allocate memory that ends on the page boundary.
@@ -207,6 +213,9 @@ int printxval(const struct xlat *, const unsigned long long, const char *);
 /* Invoke a socket syscall, either directly or via __NR_socketcall. */
 int socketcall(const int nr, const int call,
 	       long a1, long a2, long a3, long a4, long a5);
+
+/* Call chdir and print strace output depending on flags. */
+void test_status_chdir(const char *dir, bool print_success, bool print_fail);
 
 /* Wrappers for recvmmsg and sendmmsg syscalls. */
 struct mmsghdr;

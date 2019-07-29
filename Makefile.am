@@ -4,7 +4,7 @@
 # Copyright (c) 2006-2016 Dmitry V. Levin <ldv@altlinux.org>
 # Copyright (c) 2008-2015 Mike Frysinger <vapier@gentoo.org>
 # Copyright (c) 2015 Elvira Khabirova <lineprinter0@gmail.com>
-# Copyright (c) 2002-2018 The strace developers.
+# Copyright (c) 2002-2019 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
@@ -132,6 +132,10 @@ strace_SOURCES =	\
 	flock.c		\
 	flock.h		\
 	fs_x_ioctl.c	\
+	fsconfig.c	\
+	fsmount.c	\
+	fsopen.c	\
+	fspick.c	\
 	futex.c		\
 	gcc_compat.h	\
 	get_personality.c \
@@ -145,6 +149,7 @@ strace_SOURCES =	\
 	inotify.c	\
 	inotify_ioctl.c	\
 	io.c		\
+	io_uring.c	\
 	ioctl.c		\
 	ioperm.c	\
 	iopl.c		\
@@ -156,6 +161,9 @@ strace_SOURCES =	\
 	ipc_shm.c	\
 	ipc_shmctl.c	\
 	kcmp.c		\
+	kernel_timespec.h \
+	kernel_timeval.h \
+	kernel_timex.h	\
 	kernel_types.h	\
 	kexec.c		\
 	keyctl.c	\
@@ -168,6 +176,7 @@ strace_SOURCES =	\
 	linux/asm_stat.h \
 	linux/x32/asm_stat.h \
 	linux/x86_64/asm_stat.h \
+	list.h		\
 	listen.c	\
 	lookup_dcookie.c \
 	loop.c		\
@@ -181,6 +190,7 @@ strace_SOURCES =	\
 	mmap_notify.h	\
 	mmsghdr.c	\
 	mount.c		\
+	move_mount.c	\
 	mpers_type.h	\
 	mq.c		\
 	msghdr.c	\
@@ -216,6 +226,7 @@ strace_SOURCES =	\
 	number_set.h	\
 	oldstat.c	\
 	open.c		\
+	open_tree.c	\
 	or1k_atomic.c	\
 	pathtrace.c	\
 	perf.c		\
@@ -241,8 +252,13 @@ strace_SOURCES =	\
 	print_struct_stat.c \
 	print_time.c	\
 	print_timespec.c \
+	print_timespec.h \
+	print_timespec32.c \
+	print_timespec64.c \
 	print_timeval.c	\
+	print_timeval64.c \
 	print_timex.c	\
+	print_timex.h	\
 	print_utils.h	\
 	printmode.c	\
 	printrusage.c	\
@@ -299,6 +315,7 @@ strace_SOURCES =	\
 	socketutils.c	\
 	sparc.c		\
 	sram_alloc.c	\
+	stage_output.c	\
 	stat.c		\
 	stat.h		\
 	stat64.c	\
@@ -509,6 +526,16 @@ EXTRA_DIST =				\
 	linux/bfin/set_error.c		\
 	linux/bfin/set_scno.c		\
 	linux/bfin/syscallent.h		\
+	linux/csky/arch_regs.c		\
+	linux/csky/get_error.c		\
+	linux/csky/get_scno.c		\
+	linux/csky/get_syscall_args.c	\
+	linux/csky/ioctls_arch0.h	\
+	linux/csky/ioctls_inc0.h	\
+	linux/csky/raw_syscall.h	\
+	linux/csky/set_error.c		\
+	linux/csky/set_scno.c		\
+	linux/csky/syscallent.h		\
 	linux/bfin/userent.h		\
 	linux/check_scno.c		\
 	linux/dummy.h			\
@@ -562,7 +589,9 @@ EXTRA_DIST =				\
 	linux/ia64/rt_sigframe.h	\
 	linux/ia64/set_error.c		\
 	linux/ia64/set_scno.c		\
+	linux/ia64/shuffle_scno.c	\
 	linux/ia64/syscallent.h		\
+	linux/ia64/syscallent_base_nr.h	\
 	linux/ia64/userent.h		\
 	linux/inet_diag.h		\
 	linux/m68k/arch_defs_.h		\
@@ -818,7 +847,12 @@ EXTRA_DIST =				\
 	linux/sparc64/syscallent1.h	\
 	linux/sparc64/userent.h		\
 	linux/subcall.h			\
+	linux/subcall32.h		\
+	linux/subcall64.h		\
 	linux/syscall.h			\
+	linux/syscallent-common-32.h	\
+	linux/syscallent-common.h	\
+	linux/syscallent_base_nr.h	\
 	linux/tile/arch_defs_.h		\
 	linux/tile/arch_get_personality.c \
 	linux/tile/arch_regs.c		\
@@ -941,6 +975,7 @@ sys_func.h: $(patsubst %,$(srcdir)/%,$(sys_func_h_sources))
 	done | sort -u > $@
 
 syscallent_names = subcall.h syscallent.h syscallent1.h \
+		   syscallent-common.h syscallent-common-32.h \
 		   syscallent-n32.h syscallent-n64.h syscallent-o32.h
 syscallent_patterns = $(patsubst %,\%/%,$(syscallent_names))
 syscallent_files = $(filter $(syscallent_patterns),$(EXTRA_DIST))

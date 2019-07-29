@@ -1,7 +1,7 @@
 # Automake input for strace tests.
 #
 # Copyright (c) 2011-2016 Dmitry V. Levin <ldv@altlinux.org>
-# Copyright (c) 2011-2018 The strace developers.
+# Copyright (c) 2011-2019 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: GPL-2.0-or-later
@@ -40,6 +40,7 @@ libtests_a_SOURCES = \
 	inode_of_sockfd.c \
 	libmmsg.c \
 	libsocketcall.c \
+	lock_file.c \
 	overflowuid.c \
 	pipe_maxfd.c \
 	print_quoted_string.c \
@@ -49,6 +50,7 @@ libtests_a_SOURCES = \
 	signal2name.c \
 	skip_unavailable.c \
 	sprintrc.c \
+	status.c \
 	tail_alloc.c \
 	test_netlink.h \
 	test_nlattr.h \
@@ -110,6 +112,7 @@ check_PROGRAMS = $(PURE_EXECUTABLES) \
 	ksysent \
 	list_sigaction_signum \
 	localtime \
+	looping_threads \
 	mmsg-silent \
 	mmsg_name-v \
 	msg_control-v \
@@ -122,6 +125,7 @@ check_PROGRAMS = $(PURE_EXECUTABLES) \
 	nsyscalls-d \
 	oldselect-P \
 	oldselect-efault-P \
+	orphaned_process_group \
 	pc \
 	perf_event_open_nonverbose \
 	perf_event_open_unabbrev \
@@ -155,6 +159,8 @@ check_PROGRAMS = $(PURE_EXECUTABLES) \
 	sleep \
 	stack-fcall \
 	stack-fcall-mangled \
+	status-none-threads \
+	status-unfinished-threads \
 	threads-execve \
 	unblock_reset_raise \
 	unix-pair-send-recv \
@@ -173,7 +179,9 @@ fstat64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 fstatat64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 ftruncate64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 localtime_LDADD = $(clock_LIBS) $(LDADD)
+looping_threads_LDADD = -lpthread $(LDADD)
 lstat64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
+maybe_switch_current_tcp_LDADD = -lpthread $(LDADD)
 mmap64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 mmap64_Xabbrev_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 mmap64_Xraw_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
@@ -187,6 +195,8 @@ preadv_pwritev_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 pwritev_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 stat64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
 statfs_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
+status_none_threads_LDADD = -lpthread $(LDADD)
+status_unfinished_threads_LDADD = -lpthread $(LDADD)
 threads_execve_LDADD = -lpthread $(clock_LIBS) $(LDADD)
 times_LDADD = $(clock_LIBS) $(LDADD)
 truncate64_CPPFLAGS = $(AM_CPPFLAGS) -D_FILE_OFFSET_BITS=64
@@ -223,6 +233,7 @@ DECODER_TESTS = \
 	btrfs-wX.test \
 	caps-abbrev.test \
 	caps.test \
+	clone-flags.test \
 	eventfd.test \
 	execve-v.test \
 	execve.test \
@@ -230,6 +241,7 @@ DECODER_TESTS = \
 	futex.test \
 	getuid.test \
 	int_0x80.test \
+	inotify_init-y.test \
 	ioctl.test \
 	ioctl_evdev-success-v.test \
 	ioctl_evdev-success.test \
@@ -309,6 +321,7 @@ MISC_TESTS = \
 	kill_child.test \
 	ksysent.test \
 	localtime.test \
+	looping_threads.test \
 	opipe.test \
 	options-syntax.test \
 	pc.test \
@@ -331,12 +344,17 @@ MISC_TESTS = \
 	restart_syscall.test \
 	sigblock.test \
 	sigign.test \
+	status-detached.test \
+	status-none-threads.test \
+	status-unfinished-threads.test \
 	strace-C.test \
 	strace-E.test \
 	strace-S.test \
 	strace-T.test \
 	strace-V.test \
 	strace-ff.test \
+	strace-log-merge-error.test \
+	strace-log-merge-suffix.test \
 	strace-r.test \
 	strace-t.test \
 	strace-tt.test \
@@ -365,6 +383,7 @@ VALGRIND_SUPPRESSIONS_FILES = $(abs_srcdir)/strace.supp
 EXTRA_DIST = \
 	COPYING \
 	GPL-2.0-or-later \
+	PTRACE_SEIZE.sh \
 	accept_compat.h \
 	attach-p-cmd.h \
 	caps-abbrev.awk \
@@ -415,6 +434,7 @@ EXTRA_DIST = \
 	sockaddr_xlat.c \
 	sockname.c \
 	stack-fcall.h \
+	status-detached.expected \
 	strace-C.expected \
 	strace-E.expected \
 	strace-T.expected \

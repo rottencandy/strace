@@ -5,19 +5,19 @@
 # Copyright (c) 2006-2016 Dmitry V. Levin <ldv@altlinux.org>
 # Copyright (c) 2008-2015 Mike Frysinger <vapier@gentoo.org>
 # Copyright (c) 2015 Elvira Khabirova <lineprinter0@gmail.com>
-# Copyright (c) 2002-2018 The strace developers.
+# Copyright (c) 2002-2019 The strace developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: LGPL-2.1-or-later
 
 AC_PREREQ(2.57)
 AC_INIT([strace],
-	m4_esyscmd([./git-version-gen .tarball-version]),
+	st_esyscmd_s([./git-version-gen .tarball-version]),
 	[strace-devel@lists.strace.io],
 	[strace],
 	[https://strace.io])
-m4_define([copyright_year], m4_esyscmd([./copyright-year-gen .year]))
-m4_define([manpage_date], m4_esyscmd([./file-date-gen strace.1.in]))
+m4_define([copyright_year], st_esyscmd_s([./copyright-year-gen .year]))
+m4_define([manpage_date], st_esyscmd_s([./file-date-gen strace.1.in]))
 AC_COPYRIGHT([Copyright (c) 1999-]copyright_year[ The strace developers.])
 AC_CONFIG_SRCDIR([strace.c])
 AC_CONFIG_AUX_DIR([.])
@@ -78,6 +78,10 @@ avr32*)
 bfin)
 	arch=bfin
 	AC_DEFINE([BFIN], 1, [Define for the Blackfin architecture.])
+	;;
+csky*)
+	arch=csky
+	AC_DEFINE([CSKY], 1, [Define for the C-SKY architecture])
 	;;
 hppa*|parisc*)
 	arch=hppa
@@ -258,6 +262,7 @@ AC_CHECK_FUNCS(m4_normalize([
 	iconv_open
 	if_indextoname
 	open64
+	open_memstream
 	prctl
 	preadv
 	process_vm_readv
@@ -278,6 +283,9 @@ AC_CHECK_TYPES([struct mmsghdr],,, [#include <sys/socket.h>])
 
 AC_CHECK_TYPES([__kernel_long_t, __kernel_ulong_t],,,
 [#include <asm/posix_types.h>])
+
+AC_CHECK_TYPES([struct __kernel_timespec, struct __kernel_sock_timeval],,,
+[#include <linux/time_types.h>])
 
 AC_CHECK_TYPES([struct stat64, struct __old_kernel_stat],,,
 [#include <sys/types.h>
@@ -380,12 +388,14 @@ AC_CHECK_HEADERS(m4_normalize([
 	linux/hiddev.h
 	linux/if_addr.h
 	linux/if_link.h
+	linux/io_uring.h
 	linux/ip_vs.h
 	linux/ipc.h
 	linux/kcmp.h
 	linux/kvm.h
 	linux/memfd.h
 	linux/mmtimer.h
+	linux/mount.h
 	linux/msg.h
 	linux/neighbour.h
 	linux/netfilter/ipset/ip_set.h
@@ -546,6 +556,9 @@ AC_CHECK_TYPES([struct statfs64], [
 ],, [#include <linux/types.h>
 #include <asm/statfs.h>])
 
+AC_CHECK_TYPES([struct statx],,, [#include <linux/types.h>
+#include <linux/stat.h>])
+
 AC_CHECK_TYPES([struct blk_user_trace_setup],,, [#include <linux/blktrace_api.h>])
 
 AC_CHECK_TYPES([struct mtd_write_req],,, [#include <mtd/mtd-abi.h>])
@@ -579,6 +592,11 @@ if test "x$st_cv_linux_signal" = xno; then
 fi
 
 AC_CHECK_TYPES([struct __aio_sigset],,, [#include <linux/aio_abi.h>])
+
+AC_CHECK_MEMBERS(m4_normalize([
+		struct iocb.aio_flags,
+		struct iocb.aio_rw_flags
+		]),,, [#include <linux/aio_abi.h>])
 
 CPPFLAGS="$saved_CPPFLAGS"
 
@@ -889,7 +907,10 @@ st_STACKTRACE
 
 if test "$arch" = mips && test "$no_create" != yes; then
 	mkdir -p linux/mips
-	if $srcdir/linux/mips/genstub.sh linux/mips; then
+	if $srcdir/linux/mips/genstub.sh \
+	   $srcdir/linux/mips linux/mips n32 n64 o32 &&
+	   $srcdir/linux/mips/genstub.sh \
+	   $srcdir/linux linux/mips common common-32; then
 		AC_MSG_RESULT([Generated MIPS syscallent stubs])
 	else
 		AC_MSG_ERROR([Failed to generate syscallent stubs])

@@ -6,7 +6,7 @@
  * Copyright (c) 1999 IBM Deutschland Entwicklung GmbH, IBM Corporation
  *                     Linux for s390 port by D.J. Barrow
  *                    <barrow_dj@mail.yahoo.com,djbarrow@de.ibm.com>
- * Copyright (c) 1999-2018 The strace developers.
+ * Copyright (c) 1999-2019 The strace developers.
  * All rights reserved.
  *
  * SPDX-License-Identifier: LGPL-2.1-or-later
@@ -28,7 +28,7 @@
 #include <sys/uio.h>
 
 /* for __X32_SYSCALL_BIT */
-#include <asm/unistd.h>
+#include "scno.h"
 
 #include "regs.h"
 
@@ -41,6 +41,7 @@
 
 #include "syscall.h"
 #include "xstring.h"
+#include "syscallent_base_nr.h"
 
 /* Define these shorthand notations to simplify the syscallent files. */
 #include "sysent_shorthand_defs.h"
@@ -366,7 +367,8 @@ dumpio(struct tcb *tcp)
 		case SEN_pwrite:
 		case SEN_send:
 		case SEN_sendto:
-		case SEN_mq_timedsend:
+		case SEN_mq_timedsend_time32:
+		case SEN_mq_timedsend_time64:
 			dumpstr(tcp, tcp->u_arg[1], tcp->u_arg[2]);
 			break;
 		case SEN_writev:
@@ -393,7 +395,8 @@ dumpio(struct tcb *tcp)
 		case SEN_pread:
 		case SEN_recv:
 		case SEN_recvfrom:
-		case SEN_mq_timedreceive:
+		case SEN_mq_timedreceive_time32:
+		case SEN_mq_timedreceive_time64:
 			dumpstr(tcp, tcp->u_arg[1], tcp->u_rval);
 			return;
 		case SEN_readv:
@@ -406,6 +409,8 @@ dumpio(struct tcb *tcp)
 			dumpiov_in_msghdr(tcp, tcp->u_arg[1], tcp->u_rval);
 			return;
 		case SEN_recvmmsg:
+		case SEN_recvmmsg_time32:
+		case SEN_recvmmsg_time64:
 			dumpiov_in_mmsghdr(tcp, tcp->u_arg[1]);
 			return;
 		}
@@ -575,11 +580,13 @@ syscall_entering_decode(struct tcb *tcp)
 		return res;
 	}
 
+#ifdef SYS_syscall_subcall
+	if (tcp_sysent(tcp)->sen == SEN_syscall)
+		decode_syscall_subcall(tcp);
+#endif
 #if defined SYS_ipc_subcall	\
- || defined SYS_socket_subcall	\
- || defined SYS_syscall_subcall
-	for (;;) {
-		switch (tcp_sysent(tcp)->sen) {
+ || defined SYS_socket_subcall
+	switch (tcp_sysent(tcp)->sen) {
 # ifdef SYS_ipc_subcall
 		case SEN_ipc:
 			decode_ipc_subcall(tcp);
@@ -590,15 +597,6 @@ syscall_entering_decode(struct tcb *tcp)
 			decode_socket_subcall(tcp);
 			break;
 # endif
-# ifdef SYS_syscall_subcall
-		case SEN_syscall:
-			decode_syscall_subcall(tcp);
-			if (tcp_sysent(tcp)->sen != SEN_syscall)
-				continue;
-			break;
-# endif
-		}
-		break;
 	}
 #endif
 
@@ -651,6 +649,9 @@ syscall_entering_trace(struct tcb *tcp, unsigned int *sig)
 			unwind_tcb_capture(tcp);
 	}
 #endif
+
+	if (!is_complete_set(status_set, NUMBER_OF_STATUSES))
+		strace_open_memstream(tcp);
 
 	printleader(tcp);
 	tprintf("%s(", tcp_sysent(tcp)->sys_name);
@@ -714,7 +715,7 @@ print_syscall_resume(struct tcb *tcp)
 	 * "strace -ff -oLOG test/threaded_execve" corner case.
 	 * It's the only case when -ff mode needs reprinting.
 	 */
-	if ((followfork < 2 && printing_tcp != tcp)
+	if ((followfork < 2 && printing_tcp != tcp && tcp->real_outf == NULL)
 	    || (tcp->flags & TCB_REPRINT)) {
 		tcp->flags &= ~TCB_REPRINT;
 		printleader(tcp);
@@ -744,6 +745,11 @@ syscall_exiting_trace(struct tcb *tcp, struct timespec *ts, int res)
 		tprints(") ");
 		tabto();
 		tprints("= ? <unavailable>\n");
+		if (!is_complete_set(status_set, NUMBER_OF_STATUSES)) {
+			bool publish = is_number_in_set(STATUS_UNAVAILABLE,
+							status_set);
+			strace_close_memstream(tcp, publish);
+		}
 		line_ended();
 		return res;
 	}
@@ -753,20 +759,22 @@ syscall_exiting_trace(struct tcb *tcp, struct timespec *ts, int res)
 	if (raw(tcp)) {
 		/* sys_res = printargs(tcp); - but it's nop on sysexit */
 	} else {
-	/* FIXME: not_failing_only (IOW, option -z) is broken:
-	 * failure of syscall is known only after syscall return.
-	 * Thus we end up with something like this on, say, ENOENT:
-	 *     open("does_not_exist", O_RDONLY <unfinished ...>
-	 *     {next syscall decode}
-	 * whereas the intended result is that open(...) line
-	 * is not shown at all.
-	 */
-		if (not_failing_only && tcp->u_error)
-			return 0;	/* ignore failed syscalls */
 		if (tcp->sys_func_rval & RVAL_DECODED)
 			sys_res = tcp->sys_func_rval;
 		else
 			sys_res = tcp_sysent(tcp)->sys_func(tcp);
+	}
+
+	if (!is_complete_set(status_set, NUMBER_OF_STATUSES)) {
+		bool publish = syserror(tcp)
+			       && is_number_in_set(STATUS_FAILED, status_set);
+		publish |= !syserror(tcp)
+			   && is_number_in_set(STATUS_SUCCESSFUL, status_set);
+		strace_close_memstream(tcp, publish);
+		if (!publish) {
+			line_ended();
+			return 0;
+		}
 	}
 
 	tprints(") ");
@@ -1148,7 +1156,7 @@ free_sysent_buf(void *ptr)
 }
 
 static bool
-ptrace_get_syscall_info(struct tcb *tcp)
+strace_get_syscall_info(struct tcb *tcp)
 {
 	/*
 	 * ptrace_get_syscall_info_supported should have been checked
@@ -1194,7 +1202,7 @@ get_instruction_pointer(struct tcb *tcp, kernel_ulong_t *ip)
 		return false;
 
 	if (ptrace_get_syscall_info_supported) {
-		if (!ptrace_get_syscall_info(tcp))
+		if (!strace_get_syscall_info(tcp))
 			return false;
 		*ip = (kernel_ulong_t) ptrace_sci.instruction_pointer;
 		return true;
@@ -1221,7 +1229,7 @@ get_stack_pointer(struct tcb *tcp, kernel_ulong_t *sp)
 		return false;
 
 	if (ptrace_get_syscall_info_supported) {
-		if (!ptrace_get_syscall_info(tcp))
+		if (!strace_get_syscall_info(tcp))
 			return false;
 		*sp = (kernel_ulong_t) ptrace_sci.stack_pointer;
 		return true;
@@ -1248,7 +1256,7 @@ get_syscall_regs(struct tcb *tcp)
 		return get_regs_error;
 
 	if (ptrace_get_syscall_info_supported)
-		return ptrace_get_syscall_info(tcp) ? 0 : get_regs_error;
+		return strace_get_syscall_info(tcp) ? 0 : get_regs_error;
 
 	return get_regs(tcp);
 }
@@ -1300,7 +1308,7 @@ get_scno(struct tcb *tcp)
 		tcp->s_ent = &sysent[tcp->scno];
 		tcp->qual_flg = qual_flags(tcp->scno);
 	} else {
-		struct sysent_buf *s = xcalloc(1, sizeof(*s));
+		struct sysent_buf *s = xzalloc(sizeof(*s));
 
 		s->tcp = tcp;
 		s->ent = stub_sysent;
